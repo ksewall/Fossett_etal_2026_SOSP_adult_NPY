@@ -5,7 +5,8 @@ date: "2026-03-05"
 ---
 
 ```{r}
-rm(list=ls()
+
+rm(list=ls())
 
 ##load these first
 library(lattice)

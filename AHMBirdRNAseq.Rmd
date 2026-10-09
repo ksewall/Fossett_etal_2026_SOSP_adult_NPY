@@ -1,0 +1,197 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+## Installing packages
+```{r}
+
+BiocManager::install("DESeq2")
+install.packages("tidyverse")
+
+```
+
+## Loading libraries
+```{r}
+library("DESeq2")
+#library("variancePartition")
+library("BiocParallel")
+library("reshape2")
+library("tidyverse")
+```
+
+
+```{r}
+data_dir = file.path("~/Google Drive/Shared drives/2022_SOSP_prelim/Data")
+figs_dir = file.path("~/Google Drive/Shared drives/2022_SOSP_prelim/Figures")
+
+```
+
+## Reading in the data
+```{r}
+bird_counts <- read.delim(file.path(data_dir,"bird_counts.txt"), comment.char="#", header = TRUE,
+row.names = 1)
+bird_counts <- bird_counts[,-c(1:5)]
+colnames(bird_counts)
+countData <- bird_counts %>% 
+  dplyr::rename(
+    S11 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S11_S8_L001Aligned.sortedByCoord.out.bam, 
+S12 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S12_S9_L001Aligned.sortedByCoord.out.bam, 
+S13 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S13_S10_L001Aligned.sortedByCoord.out.bam,
+S14 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S14_S11_L001Aligned.sortedByCoord.out.bam,
+S16 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S16_S12_L001Aligned.sortedByCoord.out.bam,
+S17 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S17_S13_L001Aligned.sortedByCoord.out.bam,
+S18 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S18_S14_L001Aligned.sortedByCoord.out.bam,
+S1 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S1_S1_L001Aligned.sortedByCoord.out.bam,  
+S22 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S22_S15_L001Aligned.sortedByCoord.out.bam,
+S24 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S24_S16_L001Aligned.sortedByCoord.out.bam,
+S25 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S25_S17_L001Aligned.sortedByCoord.out.bam,
+S26 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S26_S18_L001Aligned.sortedByCoord.out.bam,
+S27 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S27_S19_L001Aligned.sortedByCoord.out.bam,
+S28 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S28_S20_L001Aligned.sortedByCoord.out.bam,
+S2 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S2_S2_L001Aligned.sortedByCoord.out.bam,  
+S3 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S3_S3_L001Aligned.sortedByCoord.out.bam,  
+S4 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S4_S4_L001Aligned.sortedByCoord.out.bam,  
+S6 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S6_S5_L001Aligned.sortedByCoord.out.bam,  
+S7 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S7_S6_L001Aligned.sortedByCoord.out.bam,  
+S9 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S9_S7_L001Aligned.sortedByCoord.out.bam 
+  )
+View(countData)
+
+colData <- read.table(file.path(data_dir,"Samples_files.txt"), header = TRUE, row.names = 1)
+all(rownames(colData) %in% colnames(countData))
+countData <- countData[, rownames(colData)]
+all(rownames(colData) == colnames(countData)) 
+
+```
+
+```{r}
+cor_samps<-round(cor(countData, method ="spearman"), digits = 2)
+melted_cor_samps<-melt(cor_samps)
+ggheatmap<-ggplot(data = melted_cor_samps, aes(x=Var1, y=Var2, fill = value)) + 
+  geom_tile() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, size = 12, hjust = 1)) +
+  theme(axis.text.y = element_text(size = 12))
+ggheatmap<-ggheatmap + 
+  geom_text(aes(Var2, Var1, label = value), color = "white", size = 4) +
+theme(
+  axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  panel.grid.major = element_blank(),
+  panel.border = element_blank(),
+  panel.background = element_blank(),
+  axis.ticks = element_blank())
+ggheatmap
+```
+
+
+```{r}
+dds<- DESeqDataSetFromMatrix(countData = countData, colData = colData, design = ~ Site)
+dds<-DESeq(dds)
+res01<-results(dds)
+summary(res01)
+names(res01)
+mcols(res01)
+reOrdered<-res01[order(res01$padj),]
+resultsNames(dds)
+rld<- rlog(dds, blind=TRUE)
+vsd<-varianceStabilizingTransformation(dds, blind=TRUE)
+
+select <- order(rowMeans(counts(dds, normalized=FALSE)), decreasing=TRUE)[1:100]
+nt <- normTransform(dds) # defaults to log2(x+1)
+log2.norm.counts <- assay(nt)[select,]
+
+plotPCA(vsd, intgroup=c("Site"))
+```
+
+
+```{r}
+#BiocManager::install("WGCNA")
+library("WGCNA")
+
+normalized_counts <- assay(vsd) %>%
+  t()
+
+sft <- pickSoftThreshold(normalized_counts,
+  dataIsExpr = TRUE,
+  corFnc = cor,
+  networkType = "signed"
+)
+
+sft_df <- data.frame(sft$fitIndices) %>%
+  dplyr::mutate(model_fit = -sign(slope) * SFT.R.sq)
+```
+
+```{r}
+ggplot(sft_df, aes(x = Power, y = model_fit, label = Power)) +
+  # Plot the points
+  geom_point() +
+  # We'll put the Power labels slightly above the data points
+  geom_text(nudge_y = 0.1) +
+  # We will plot what WGCNA recommends as an R^2 cutoff
+  geom_hline(yintercept = 0.80, col = "red") +
+  # Just in case our values are low, we want to make sure we can still see the 0.80 level
+  ylim(c(min(sft_df$model_fit), 1.05)) +
+  # We can add more sensible labels for our axis
+  xlab("Soft Threshold (power)") +
+  ylab("Scale Free Topology Model Fit, signed R^2") +
+  ggtitle("Scale independence") +
+  # This adds some nicer aesthetics to our plot
+  theme_classic()
+```
+
+```{r}
+bwnet <- blockwiseModules(normalized_counts,
+  maxBlockSize = 5000, # What size chunks (how many genes) the calculations should be run in
+  TOMType = "signed", # topological overlap matrix
+  power = 12, # soft threshold for network construction
+  numericLabels = FALSE, # Let's use numbers instead of colors for module labels
+  randomSeed = 1234, # there's some randomness associated with this calculation
+  # so we should set a seed
+)
+```
+
+```{r}
+module_eigengenes <- bwnet$MEs
+
+# Print out a preview
+head(module_eigengenes)
+```
+
+```{r}
+all.equal(colData$Seq_sample, rownames(module_eigengenes))
+```
+
+
+
+```{r}
+res.pca <- prcomp(bird_counts, scale = TRUE)
+print(res.pca)
+eig.val <- get_eigenvalue(res.pca)
+eig.val
+
+summary(bird_counts)
+
+corrplot(var$cos2, is.corr=FALSE)
+fviz_eig(res.pca, col.var="blue")
+
+var <- get_pca_var(res.pca)
+var
+
+```
+
+```{r}
+library("corrplot")
+corrplot(var$cos2, is.corr=FALSE)
+fviz_pca_var(res.pca,
+             col.ind = "cos2", # Color by the quality of representation
+             gradient.cols = c("darkorchid4", "gold", "darkorange"),
+             repel = TRUE
+             )
+```
+
+```{r}
+fviz_contrib(res.pca, choice = "ind", axes = 1:2)
+```
+

@@ -1,0 +1,232 @@
+---
+title: "Calculating delta delta ct & RQ"
+output: html_document
+date: "2026-03-05"
+---
+
+```{r}
+rm(list=ls()
+
+##load these first
+library(lattice)
+library(plyr)
+library(Rmisc)
+library(tidyverse)
+library(dplyr)
+library(see)
+
+##
+library(carData)
+library(effects)
+library(lubridate)
+library(Matrix)
+library(lme4)
+library(lmerTest)
+library(emmeans)
+library(performance)
+library(sandwich)
+library(survival)
+library(zoo)
+library(lmtest)
+library(car)
+library(AER)
+library(pscl)
+library(nlme)
+library(wesanderson)
+library(smatr)
+library(magrittr)
+library(data.table)
+library(ggplot2)
+library(ggpubr)
+library(MASS)
+library(patchwork)
+library(corrplot)
+library(visreg)
+library(gridExtra)
+library(grid)
+library(tidyr)
+library(Hmisc)
+library(ppcor)
+library(cowplot)
+library(qgraph)
+library(ggplotify)
+#for PCA with NAs
+library(missMDA)
+library(FactoMineR)
+library(factoextra)
+library(tayloRswift)
+```
+
+
+```{r}
+#Read in data sets
+hypo.master<-read.csv("raw_ct.csv")
+# went through and deleted all duplicates manually
+#also removed outliers below CT mean of 18
+#Data sheet is now 1 sample per bird with good ct sd's
+```
+
+```{r}
+# filter a single dataset that only includes ACTB
+qpcr.actb.dat <- hypo.master %>%
+  dplyr::filter(GENE == "ACTB")
+
+# created a data file with only ACTB 
+#write.csv(qpcr.actb.dat, "dropped_outliers_ACTB_ADULTS_12.17.25.csv")
+#manually CHANGE COLUMN NAMES (actb._C, actb.mean, actb.SD)
+# read in data file
+actb<-read.csv("ACTB/raw/[raw Ct file].csv")
+```
+
+```{r}
+#merging 
+#check the number of observations before running, this number should not change
+#after you run it
+qpcr.dat1<- left_join(hypo.master, actb, by=("SAMPLE"))
+
+```
+
+```{r}
+#This data file below has all of the other data that I want to add to the qPCR data file
+#like morhpo, breath rate, habitat, treatment, etc
+morpho.master<-read.csv("morpho_master1.csv")
+
+#morpho.master$No.id<-as.numeric(morpho.master$No.id)
+
+#merging qPCR and morpho data
+#check the number of observations before running, this number should not change
+#after you run it
+qpcr.dat.final<- left_join(qpcr.dat1, morpho.master, by=("SAMPLE"))
+#write.csv(qpcr.dat.final, "morpho_master2.csv")
+```
+
+```{r}
+#dat.2021 contains both 2021 and 2022 data
+dat.2021<-read.csv("Adult_SOSP_MASTER_MORPHO_AGG_2021_2022_12.17.25.csv")
+#manually added in year
+```
+
+```{r}
+#calculating delta ct values for all of my samples 
+dat.2021$delta.ct<-(dat.2021$ct.mean)-(dat.2021$actb.mean)
+#head(qpcr.dat.final)
+```
+
+```{r}
+#Create four data frames for each one of my target genes 
+#NPY
+#subsetting my data by gene target
+npy2021 <- dat.2021 %>%
+  dplyr::filter(GENE.x == "NPY")
+#further subestting gene target by baseline rural (rural)
+rural.npy2021 <- npy2021 %>%
+  dplyr::filter(Habitat == "Rural", Year == "2021")
+```
+
+```{r}
+#calculating the mean delta ct value (control)
+r.npy2021.delta.ctmean<- mean(rural.npy2021$delta.ct)
+r.npy2021.delta.ctmean
+
+#adding delta ct mean value back into npy data frame 
+npy2021$delta.ctmean<-r.npy2021.delta.ctmean
+```
+
+```{r}
+#repeat for all other gene targets
+#NPY5R
+npy5r.2021 <- dat.2021 %>%
+  dplyr::filter(GENE.x == "NPY5R")
+
+rural.npy5r.2021 <- npy5r.2021 %>% dplyr::filter(Habitat == "Rural", Year == "2021")
+
+r.npy5r.2021.delta.ctmean<- mean(rural.npy5r.2021$delta.ct, na.rm=T)
+
+npy5r.2021$delta.ctmean<-r.npy5r.2021.delta.ctmean
+```
+
+```{r}
+#NPY1R
+npy1r.2021 <- dat.2021 %>%
+  dplyr::filter(GENE.x == "NPY1R")
+
+rural.npy1r.2021 <- npy1r.2021 %>% dplyr::filter(Habitat == "Rural", Year == "2021")
+
+r.npy1r.delta.ctmean.2021<- mean(rural.npy1r.2021$delta.ct, na.rm=T)
+
+npy1r.2021$delta.ctmean<-r.npy1r.delta.ctmean.2021
+```
+
+```{r}
+#NPY2R
+npy2r.2021 <- dat.2021 %>%
+  dplyr::filter(GENE.x == "NPY2R")
+
+rural.npy2r.2021 <- npy2r.2021 %>%  dplyr::filter(Habitat == "Rural", Year == "2021")
+
+r.npy2r.delta.ctmean.2021<- mean(rural.npy2r.2021$delta.ct, na.rm=T)
+
+npy2r.2021$delta.ctmean<-r.npy2r.delta.ctmean.2021
+```
+
+```{r}
+#AVT4R
+
+avt4r.2021 <- dat.2021 %>%
+  dplyr::filter(GENE.x == "AVT4R")
+
+rural.avt4r.2021 <- avt4r.2021 %>%  dplyr::filter(Habitat == "Rural", Year == "2021")
+
+r.avt4r.delta.ctmean.2021<- mean(rural.avt4r.2021$delta.ct, na.rm=T)
+
+avt4r.2021$delta.ctmean<-r.avt4r.delta.ctmean.2021
+```
+
+```{r}
+#AVTIN1
+avtin1.2021 <- dat.2021 %>%
+  dplyr::filter(GENE.x == "AVTIN1")
+
+rural.avtin1.2021 <- avtin1.2021 %>%  dplyr::filter(Habitat == "Rural", Year == "2021")
+
+r.avtin1.delta.ctmean.2021<- mean(rural.avtin1.2021$delta.ct, na.rm=T)
+
+avtin1.2021$delta.ctmean<-r.avtin1.delta.ctmean.2021
+```
+
+```{r}
+#AVT3R
+avt3r.2021 <- dat.2021 %>%
+  dplyr::filter(GENE.x == "AVT3R")
+
+rural.avt3r.2021 <- avt3r.2021 %>%  dplyr::filter(Habitat == "Rural", Year == "2021")
+
+r.avt3r.delta.ctmean.2021<- mean(rural.avt3r.2021$delta.ct, na.rm=T)
+
+avt3r.2021$delta.ctmean<-r.avt3r.delta.ctmean.2021
+```
+
+```{r}
+#combining all of my files back in and they now have a delta ct mean value
+qpcr.f.dat.2021<-rbind(npy2021, npy1r.2021, npy2r.2021, npy5r.2021)
+```
+
+```{r}
+#calculating delta delta ct (dd.ct)
+qpcr.f.dat.2021$dd.ct<-(qpcr.f.dat.2021$delta.ct)-(qpcr.f.dat.2021$delta.ctmean)
+```
+
+```{r}
+#calculating RQ value
+qpcr.f.dat.2021$RQ <- 2^(-qpcr.f.dat.2021$dd.ct)
+
+#viewing RQ values 
+qpcr.f.dat.2021$RQ
+```
+
+```{r}
+#write.csv(qpcr.f.dat.2021, "12.16.25.Adult.SOSP.2021.GE.Master_all.calcs.done.in.R.csv")
+
+#manually removed all AVT gene expression values
+#write.csv(qpcr.f.dat.2021, "master_NPY_gene_expression.csv")
+```

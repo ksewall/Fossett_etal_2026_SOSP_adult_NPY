@@ -1,0 +1,533 @@
+---
+title: "Adult NPY system gene expression (qPCR)"
+output: html_document
+date: "2026-03-05"
+---
+
+```{r}
+
+rm(list=ls())
+
+##load these first
+library(lattice)
+library(plyr)
+library(Rmisc)
+library(tidyverse)
+library(dplyr)
+library(see)
+
+##
+library(carData)
+library(effects)
+library(lubridate)
+library(Matrix)
+library(lme4)
+library(lmerTest)
+library(emmeans)
+library(performance)
+library(sandwich)
+library(survival)
+library(zoo)
+library(lmtest)
+library(car)
+library(AER)
+library(pscl)
+library(nlme)
+library(wesanderson)
+library(smatr)
+library(magrittr)
+library(data.table)
+library(ggplot2)
+library(ggpubr)
+library(MASS)
+library(patchwork)
+library(corrplot)
+library(visreg)
+library(gridExtra)
+library(grid)
+library(tidyr)
+library(Hmisc)
+library(ppcor)
+library(cowplot)
+library(qgraph)
+library(ggplotify)
+#for PCA with NAs
+library(missMDA)
+library(FactoMineR)
+library(factoextra)
+library(tayloRswift)
+
+getwd()
+```
+
+```{r, reading in data file}
+GE.2021.2022<-read.csv("master_NPY_gene_expression.csv")
+wide<-read.csv("wide_master_NPY_gene_expression.csv") #only use to make PCA
+```
+
+```{r, turning data into real date}
+#turn all your date column into a real date
+GE.2021.2022$Date = as.Date(GE.2021.2022$Date, "%m/%d/%y")
+GE.2021.2022$Date
+
+#Create "day" column for julian date for analysis
+GE.2021.2022$day=yday(GE.2021.2022$Date)
+
+#mean center
+GE.2021.2022$mean.cent.day<-(GE.2021.2022$day)-(mean(GE.2021.2022$day))
+#use "mean.center.day" from now on
+
+#Write fundtion to make the times digestible by R. 
+convert_to_seconds <- function(time_str) {
+  if (is.na(time_str) || time_str == "") return(NA)  # Handle missing/blank values
+  
+  time_str <- trimws(time_str)  # Remove leading/trailing spaces
+  
+  # If the value is in HH:MM:SS format (Excel time of day)
+  if (grepl("^\\d{1,2}:\\d{2}:\\d{2}$", time_str)) {
+    parts <- as.numeric(unlist(strsplit(time_str, ":")))
+    return(parts[1] * 3600 + parts[2] * 60 + parts[3])
+  }
+  
+  # If the value is in MM:SS format (desired format)
+  if (grepl("^\\d{1,2}:\\d{2}$", time_str)) {
+    parts <- as.numeric(unlist(strsplit(time_str, ":")))
+    return(parts[1] * 60 + parts[2])
+  }
+  
+  # Handle numeric values (Excel stores time as a fraction of a day)
+  suppressWarnings(num_val <- as.numeric(time_str))
+  if (!is.na(num_val) && num_val < 1) {
+    total_seconds <- num_val * 86400  # Convert fraction of a day to seconds
+    return(round(total_seconds))  
+  }
+  
+  return(NA)  # If format is unrecognized
+}
+
+# Apply the function to standardize times
+GE.2021.2022 <- GE.2021.2022 %>%
+  mutate(seconds = sapply(Time, convert_to_seconds))
+
+#Filtering out all trials except late so we have a single data point per bird
+GE.2021.2022.late = GE.2021.2022 %>% dplyr::filter(TRIAL=="Late")
+```
+
+
+```{r}
+#Filter out all other gene targets except NPY system genes
+qpcr.npy = GE.2021.2022%>% dplyr::filter(GENE.x=="NPY")
+qpcr.1r = GE.2021.2022 %>% dplyr::filter(GENE.x=="NPY1R")
+qpcr.2r = GE.2021.2022 %>% dplyr::filter(GENE.x=="NPY2R")
+qpcr.5r = GE.2021.2022 %>% dplyr::filter(GENE.x=="NPY5R")
+```
+
+```{r}
+### Boxplot to look at Habitat and RQ
+# This code combines plots for NPY, NPY1R, NPY2R and NPY5R (Fig. 2)
+
+#############--NPY
+
+# Filter
+qpcr.npy <- GE.2021.2022.late %>% dplyr::filter(GENE.x == "NPY")
+qpcr.npy1r <- GE.2021.2022.late %>% dplyr::filter(GENE.x == "NPY1R")
+qpcr.npy2r <- GE.2021.2022.late %>% dplyr::filter(GENE.x == "NPY2R")
+qpcr.npy5r <- GE.2021.2022.late %>% dplyr::filter(GENE.x == "NPY5R")
+
+# Factor the full data frame so "Urban" comes first
+qpcr.npy$Habitat <- factor(qpcr.npy$Habitat, levels = c("Urban", "Rural"))
+qpcr.npy1r$Habitat <- factor(qpcr.npy1r$Habitat, levels = c("Urban", "Rural"))
+qpcr.npy2r$Habitat <- factor(qpcr.npy2r$Habitat, levels = c("Urban", "Rural"))
+qpcr.npy5r$Habitat <- factor(qpcr.npy5r$Habitat, levels = c("Urban", "Rural"))
+
+# Adding significance markers
+sig <- data.frame(
+  GENE.x = c("NPY", "NPY1R", "NPY2R", "NPY5R"),
+  x = 1.5, y = c(4.6, 13.0, 6.5, 0.37), label = "*")
+
+# Combined plot figure (Fig. 2 in manuscript)
+
+# NPY ------------------------------------------------------------
+npy.fig <- ggplot(
+  qpcr.npy,
+  aes(x = Habitat, y = RQ, color = Habitat)) +
+  geom_boxplot(
+    coef = 5,
+    width = 0.5,
+    outlier.shape = 21,
+    outlier.size = 3,
+    outlier.fill = "white",
+    outlier.color = "blue",
+    outlier.stroke = 1.2) +
+  geom_point(
+    position = position_jitterdodge(dodge.width = 0.9),
+    size = 1,
+    stroke = 2) +
+  geom_point(
+    stat = "summary",
+    shape = "+",
+    size = 6,
+    color = "blue") +
+  # Panel label A
+  annotate(
+    "label",
+    x = 0.5,
+    y = Inf,
+    label = "A",
+    hjust = 0.5,
+    vjust = 1.4,
+    size = 5,
+    fontface = "bold",
+    family = "Arial",
+    fill = "white",
+    color = "black",
+    label.size = 0.5) +
+  xlab("Habitat") +
+  ylab("NPY mRNA Expression") +
+  theme_classic(
+    base_size = 15,
+    base_family = "Arial") +
+  theme(
+    axis.title.x = element_text(
+      margin = margin(t = 15)),
+    legend.position = "none") +
+  scale_color_manual(
+    values = c(
+      "Urban" = "rosybrown4",
+      "Rural" = "springgreen3"))
+
+# NPY1R ----------------------------------------------------------
+
+npy1r.fig <- ggplot(
+  qpcr.npy1r,
+  aes(x = Habitat, y = RQ, color = Habitat)) +
+  geom_boxplot(
+    coef = 5,
+    width = 0.5,
+    outlier.shape = 21,
+    outlier.size = 3,
+    outlier.fill = "white",
+    outlier.color = "blue",
+    outlier.stroke = 1.2) +
+  geom_point(
+    position = position_jitterdodge(dodge.width = 0.9),
+    size = 1,
+    stroke = 2) +
+  geom_point(
+    stat = "summary",
+    shape = "+",
+    size = 6,
+    color = "blue") +
+  # Panel label B
+  annotate(
+    "label",
+    x = 0.5,
+    y = Inf,
+    label = "B",
+    hjust = 0.5,
+    vjust = 1.4,
+    size = 5,
+    fontface = "bold",
+    family = "Arial",
+    fill = "white",
+    color = "black",
+    label.size = 0.5) +
+  # Significance asterisk
+  annotate(
+    "text",
+    x = 1.5,
+    y = max(qpcr.npy1r$RQ, na.rm = TRUE),
+    label = "*",
+    size = 11,
+    vjust = 3) +
+  xlab("Habitat") +
+  ylab("NPY1R mRNA Expression") +
+  theme_classic(
+    base_size = 15,
+    base_family = "Arial") +
+  theme(
+    axis.title.x = element_text(
+      margin = margin(t = 15)),
+    legend.position = "none") +
+  scale_color_manual(
+    values = c(
+      "Urban" = "rosybrown4",
+      "Rural" = "springgreen3"))
+
+# NPY2R ----------------------------------------------------------
+
+npy2r.fig <- ggplot(
+  qpcr.npy2r,
+  aes(x = Habitat, y = RQ, color = Habitat)) +
+  geom_boxplot(
+    coef = 5,
+    width = 0.5,
+    outlier.shape = 21,
+    outlier.size = 3,
+    outlier.fill = "white",
+    outlier.color = "blue",
+    outlier.stroke = 1.2) +
+  geom_point(
+    position = position_jitterdodge(dodge.width = 0.9),
+    size = 1,
+    stroke = 2) +
+  geom_point(
+    stat = "summary",
+    shape = "+",
+    size = 6,
+    color = "blue") +
+  # Panel label C
+  annotate(
+    "label",
+    x = 0.5,
+    y = Inf,
+    label = "C",
+    hjust = 0.5,
+    vjust = 1.4,
+    size = 5,
+    fontface = "bold",
+    family = "Arial",
+    fill = "white",
+    color = "black",
+    label.size = 0.5) +
+  # Significance asterisk
+  annotate(
+    "text",
+    x = 1.5,
+    y = max(qpcr.npy2r$RQ, na.rm = TRUE),
+    label = "*",
+    size = 11,
+    vjust = 3) +
+  xlab("Habitat") +
+  ylab("NPY2R mRNA Expression") +
+  theme_classic(
+    base_size = 15,
+    base_family = "Arial") +
+  theme(
+    axis.title.x = element_text(
+      margin = margin(t = 15)
+    ),
+    legend.position = "none") +
+  scale_color_manual(
+    values = c(
+      "Urban" = "rosybrown4",
+      "Rural" = "springgreen3"))
+
+# NPY5R ----------------------------------------------------------
+
+npy5r.fig <- ggplot(
+  qpcr.npy5r,
+  aes(x = Habitat, y = RQ, color = Habitat)) +
+  geom_boxplot(
+    coef = 5,
+    width = 0.5,
+    outlier.shape = 21,
+    outlier.size = 3,
+    outlier.fill = "white",
+    outlier.color = "blue",
+    outlier.stroke = 1.2) +
+  geom_point(
+    position = position_jitterdodge(dodge.width = 0.9),
+    size = 1,
+    stroke = 2) +
+  geom_point(
+    stat = "summary",
+    shape = "+",
+    size = 6,
+    color = "blue") +
+  # Panel label D
+  annotate(
+    "label",
+    x = 0.5,
+    y = Inf,
+    label = "D",
+    hjust = 0.5,
+    vjust = 1.4,
+    size = 5,
+    fontface = "bold",
+    family = "Arial",
+    fill = "white",
+    color = "black",
+    label.size = 0.5) +
+  # Significance asterisk
+  annotate(
+    "text",
+    x = 1.5,
+    y = max(qpcr.npy5r$RQ, na.rm = TRUE),
+    label = "*",
+    size = 11,
+    vjust = 3) +
+  xlab("Habitat") +
+  ylab("NPY5R mRNA Expression") +
+  theme_classic(
+    base_size = 15,
+    base_family = "Arial") +
+  theme(
+    axis.title.x = element_text(
+      margin = margin(t = 15)
+    ),
+    legend.position = "none") +
+  scale_color_manual(
+    values = c(
+      "Urban" = "rosybrown4",
+      "Rural" = "springgreen3"))
+
+# Combine plots --------------------------------------------------
+
+combined_plot <-
+  npy.fig +
+  npy1r.fig +
+  npy2r.fig +
+  npy5r.fig
+
+# Save figure ----------------------------------------------------
+
+jpeg(file = "new_npy.genesXhab.jpeg", width = 12, height = 8, units = "in", res = 600)
+print(combined_plot + theme(legend.position = "none"))
+dev.off()
+```
+
+```{r}
+##geneXhabitat
+
+l1= lmer(dd.ct ~ Habitat*GENE.x+mean.cent.day+Playback.exposure..mins.+(1|SAMPLE), data = GE.2021.2022)
+#dropped mass and time of day (seconds) from the model using backwards stepwise
+histogram(residuals(l1))
+check_model(l1)
+shapiro.test(residuals(l1))
+summary(l1)
+#using the anova function
+anova(l1)
+plot(allEffects(l1))
+#Post hoc analysis
+emm.l1<-emmeans(l1, ~ Habitat*GENE.x)
+emm.l1
+# For pairwise comparisons of all combinations
+pairs(emm.l1)
+
+# Or, for specific contrasts (e.g., comparing habitat within levels of gene target)
+contrast(emm.l1, method = "pairwise", by = "GENE.x")
+
+#exporting results
+res.pro.table.1 <- as.data.frame(anova(l1))
+res.pro.table.2 <- as.data.frame(contrast(emm.l1, method = "pairwise", by = "GENE.x"))
+#write.csv(res.pro.table.1,"3.9.26.npy-r.geneXhabitat.results1.csv")
+#write.csv(res.pro.table.2,"3.9.26.npy-r.geneXhabitat.results2.csv")
+```
+
+```{r}
+##PCA of NPY-system genes (Supp. Mat. Fig. 2)
+
+head(wide)
+wide.late<-filter(wide, TRIAL == "Late")
+#creating new dataset that only has NPY genes for PCA
+wide.late.npy.genes <- wide.late |>
+  dplyr::select(NPY, NPY1R, NPY2R, NPY5R)
+
+#Handling missing values in PCA
+#using packages labeled above^^(libraries)
+nb<- estim_ncpPCA(wide.late.npy.genes, scale=TRUE)
+comp<- imputePCA(wide.late.npy.genes, ncp=3, scale=TRUE)
+res.pca <- PCA(comp$completeObs)
+
+#graph of individual samples
+fviz_pca_ind(res.pca, col.ind = "cos2", gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), repel = TRUE)
+
+#graph of variables (correlation circle)
+supp.fig.3<-fviz_pca_var(res.pca, col.var = "contrib", gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), repel = TRUE)
+supp.fig.3
+
+#print fig for pub
+ggsave("supp.fig.3.png", plot = supp.fig.3,
+       width = 8, height = 6, units = "in", dpi = 600)
+
+# Biplot of individuals and variables
+fviz_pca_biplot(res.pca, repel = TRUE)
+
+#check your data
+summary(res.pca)
+#Explains 67.445%
+
+#Add the PCA scores back into the data
+wide.late$npy.genes = res.pca$ind$coord
+
+#Write it into a data sheet and use this data sheet from now on
+#write.csv(wide.late, ("NPY.genes.PCA.csv"))
+```
+
+```{r}
+#reading in new data set that includes everything for late behavior and
+#NPY system genes merged into PCA
+npy.pca.late<-read.csv("NPY.genes.PCA.csv")
+#read this in so I can add new PCA with late only agg scores. See below for final data sheet
+#head(npy.pca.late)
+```
+
+```{r}
+#PCA with only late aggression scores
+#creating new dataset that only has aggressive signals so that I can run the permutation to deal with NAs
+agg.late <- npy.pca.late |>
+  select(No..soft.songs, Wing.wave, Distance..m.)
+head(npy.pca.late)
+
+#Handling missing values in PCA
+#using packages labeled above^^(libraries)
+nb.1<- estim_ncpPCA(agg.late, scale=TRUE)
+comp.1<- imputePCA(agg.late, ncp=2, scale=TRUE)
+res.pca.1 <- PCA(comp.1$completeObs)
+
+#Add the PCA scores back into the data
+npy.pca.late$AGG.late = res.pca.1$ind$coord
+
+#Write it into a data sheet and use this data sheet from now on
+#write.csv(npy.pca.late, ("mutated_PCA.csv"))
+
+```
+
+```{r}
+#reading in new data set that includes everything for late behavior and
+#NPY system genes merged into PCA
+#this is the final data sheet you use for behavior & gene expression analyses using PCAs for both agg & gene expression
+npy.pca.late<-read.csv("Late.agg.pca.npy.pca.3.10.26.csv")
+head(npy.pca.late)
+```
+
+```{r}
+#agg score is not normal, so I am transforming the data with log function
+#Male agg score (AGG.late.Dim.1)
+npy.pca.late$agg.t<-log(npy.pca.late$male.aggression)
+npy.pca.late$agg.t
+
+#looking at how the NPY system (PCA) relates to aggression
+l2= lm(AGG.late.Dim.1~npy.genes.Dim.1+Habitat+mass, data= npy.pca.late)
+histogram(l2$residuals)
+check_model(l2)
+shapiro.test(l2$residuals)
+anova(l2)
+summary(l2)
+
+#exporting results
+#res.pro.table.3 <- as.data.frame(coef(summary(l2)))
+#write.csv(res.pro.table.3,"3.10.26.npy-r.gene(pc1)Xagg(pc1).results.csv")
+```
+
+```{r}
+#looking at how aggression relates to gene expression
+#need to merge GE.2021.2022 (A) data sheet with npy.pca.late (B) data sheet because
+#(A) has agg PC1 based on both early and late; (B) has just late included in PC1
+#merging
+merged_df <- merge(GE.2021.2022, npy.pca.late, by = "SAMPLE")
+#transforming aggression score because it's not normal
+merged_df$agg.t<-(merged_df$AGG.late.Dim.1+2)
+merged_df$agg.t
+merged_df$agg.t<-log(merged_df$agg.t)
+merged_df$agg.t
+head(merged_df)
+l3= lm(agg.t~dd.ct.x*GENE.x.x+Habitat.x, data= merged_df )
+histogram(l3$residuals)
+check_model(l3)
+shapiro.test(l3$residuals)
+anova(l3)
+#no effect of gene expression on aggression
+```
+

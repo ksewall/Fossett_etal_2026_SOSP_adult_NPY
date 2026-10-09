@@ -1,0 +1,242 @@
+---
+title: "NPY peptide abundance"
+author: "Taylor Fossett"
+date: "2026-09-29"
+output: html_document
+---
+
+```{r}
+
+rm(list=ls())
+
+##load these first
+library(lattice)
+library(plyr)
+library(Rmisc)
+library(tidyverse)
+library(dplyr)
+library(see)
+
+##
+library(carData)
+library(effects)
+library(lubridate)
+library(Matrix)
+library(lme4)
+library(lmerTest)
+library(emmeans)
+library(performance)
+library(sandwich)
+library(survival)
+library(zoo)
+library(lmtest)
+library(car)
+library(AER)
+library(pscl)
+library(nlme)
+library(wesanderson)
+library(smatr)
+library(magrittr)
+library(data.table)
+library(ggplot2)
+library(ggpubr)
+library(MASS)
+library(patchwork)
+library(corrplot)
+library(visreg)
+library(gridExtra)
+library(grid)
+library(tidyr)
+library(tayloRswift)
+```
+
+```{r}
+npy.count<-read.csv("NPY.cell.counts.csv")
+npy.pca.late<-read.csv("mutated_PCA.csv")
+all.npy.ge<-read.csv("master_NPY_gene_expression.csv")
+```
+
+```{r}
+unique(npy.count$ID)
+unique(all.npy.ge$ID)
+#merging cell count data with NPY gene expression and morpho/behavior data
+merged_df_all <- merge(npy.count, all.npy.ge, by = "ID")
+
+#merging cell count data with NPY gene expression and morpho/behavior data
+merged_df <- merge(npy.count, npy.pca.late, by = "ID")
+
+#this one is a messup because it's only PC1 with both early and late, so used it for cell count analysis only
+#write.csv(merged_df_all,"3.16.26.cell.counts.GE.agg(pc1).results.csv")
+
+#write new data set that includes cell count data with NPY gene expression and morpho/behavior data
+#this is the right one with PC1 for both GE and behavior
+#write.csv(merged_df,"3.17.26.cell.counts.GE(pc1).agg(pc1).results.csv")
+
+```
+
+```{r}
+count.all<-read.csv("expression_aggression(pc1).csv")
+count.all.1<-read.csv("expression(pc1)_aggression(pc1).csv")
+```
+
+```{r}
+#creating a df with a single point for each bird
+count.fig<-merged_df_all %>%
+  group_by(Total.Area) %>%
+  slice(1) %>%
+  ungroup()
+#creating average for figure
+avg <- count.fig %>%
+  group_by(ID, Habitat, brain.region) %>%
+  summarise(avg_count = mean(Count), .groups = "drop")
+```
+
+```{r}
+#turn all your date column into a real date
+count.all.1$Date = as.Date(count.all.1$Date, "%m/%d/%y")
+count.all.1$Date
+
+#Create "day" column for julian date for analysis
+count.all.1$day=yday(count.all.1$Date)
+
+#mean center by total (day)
+count.all.1$mean.cent.day<-(count.all.1$day)-(mean(count.all.1$day))
+#use "mean.center.day" from now on
+```
+
+```{r}
+#Factor the full data frame so "Urban" comes first
+  avg$Habitat <- factor(avg$Habitat, levels=c("Urban", "Rural"))
+```
+
+```{r}
+head(count.all)
+
+count.1<-filter(count.all, count.analysis == "Y") 
+
+#Factor obs
+count.1$Year.x<- factor(count.1$Year.x)
+
+#dropped year because it is highly correlated with playback exposure
+#dropped playback exposure after backwards stepwise
+#dropped hemisphere after backwards stepwise
+
+l1= glmer(Count~Habitat*brain.region+mean.cent.day+(1|ID), data= count.1, family= poisson)
+histogram(residuals(l1))
+check_model(l1)
+shapiro.test(residuals(l1))
+summary(l1)
+
+#Post hoc analysis
+emm.l1<-emmeans(l1, pairwise ~ Habitat*brain.region)
+emm.l1
+
+# Or, for specific contrasts (e.g., comparing habitat within levels of gene target)
+#contrast(emm.l1, method = "pairwise", by = "brain.region")
+
+#exporting results
+res.pro.table.1 <- as.data.frame(coef(summary(l1)))
+res.pro.table.2 <- as.data.frame(contrast(emm.l1, method = "pairwise"))
+#write.csv(res.pro.table.1,"3.16.26.npy-r.cell.countXhabitat.results1.csv")
+#write.csv(res.pro.table.2,"3.16.26.npy-r.cell.countXhabitat.results2.csv")
+```
+
+```{r}
+#creating stats to add to the figure to show statistical differences in IN vs PVN despite no habitat differences
+#install.packages("multcomp")
+library(multcomp)
+emm <- emmeans(l1, ~ brain.region)
+emm
+pairs(emm)
+letters <- cld(emm, Letters = LETTERS, adjust = "tukey")
+letters
+
+sig <- data.frame(
+  brain.region = c("IN", "PVN"),
+  x = c(1.5, 1.5),
+  y = c(4700, 3000),
+  label = c("A", "B")
+)
+
+```
+
+```{r} 
+#figure with significance markers for brain region differences (Fig. 4 in manuscript)
+
+jpeg(file = "sig_cell.count.npy.avg.jpeg", width = 6, height = 6, units = "in", res = 600)
+
+count.fig <- ggplot(avg, aes(x = Habitat, y = avg_count, color = Habitat)) +
+  
+  geom_boxplot(
+    coef = 5,
+    width = 0.5,
+    outlier.shape = 21,
+    outlier.size = 3, 
+    outlier.fill = "white",
+    outlier.color = "blue",
+    outlier.stroke = 1.2
+  ) +
+  
+  geom_point(
+    position = position_jitterdodge(dodge.width = 0.9),
+    size = 1,
+    stroke = 2
+  ) +
+  
+  geom_point(
+    stat = "summary",
+    shape = "+",
+    size = 6,
+    color = "blue"
+  ) +
+  
+  facet_grid(. ~ brain.region, scales = "free_x", switch = "x") +
+  
+  geom_text(
+    data = sig,
+    aes(x = x, y = y, label = label),
+    inherit.aes = FALSE,
+    size = 6,
+    fontface = "bold"
+  ) +
+  
+  xlab("Habitat") +
+  ylab("NPY cell count (average)") +
+  
+  theme_classic(base_size = 15, base_family = "Arial") +
+  theme(
+    axis.title.x = element_text(margin = margin(t = 15)),
+    legend.position = "none"
+  ) +
+  
+  scale_color_manual(
+    values = c(
+      "Urban" = "rosybrown4",
+      "Rural" = "springgreen3"
+    )
+  )
+
+count.fig
+
+print(count.fig)
+
+dev.off()
+```
+
+```{r}
+#looking at the correlation between aggression and cell count
+l3= lm(AGG.late.Dim.1~Count+Habitat+mean.cent.day+Playback.exposure..mins., data= count.all.1)
+histogram(residuals(l3))
+check_model(l3)
+shapiro.test(residuals(l3))
+plot(allEffects(l3))
+anova(l3)
+summary(l3)
+
+# Or, for specific contrasts (e.g., comparing habitat within levels of gene target)
+#contrast(emm.l1, method = "pairwise", by = "brain.region")
+
+#exporting results
+res.pro.table.2 <- as.data.frame(coef(summary(l3)))
+#write.csv(res.pro.table.2,"8.10.26.summary_npy-r.cell.countXagg.results1.csv")
+```

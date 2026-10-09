@@ -1,26 +1,38 @@
----
-title: "README.md"
-author: "Taylor Fossett"
-date: "2026-09-29"
-output: html_document
----
+README
+================
+Taylor Fossett
+2026-10-09
 
 # Upregulation of NPY receptors is associated with urbanization, but does not predict territorial aggression
 
 Data and R code for:
 
-Taylor E. Fossett; Guillian H. Casanova; Samuel J. Lane; David C. Haak; Isaac J. VanDiest, Elizabeth R. Gilbert, and Kendra B. Sewall. Upregulation of NPY receptors is associated with urbanization, but does not predict territorial aggression. Submitted to Molecular Ecology.
+Title: Upregulation of NPY receptors is associated with urbanization,
+but does not predict territorial aggression.
 
-Sewall Lab, Department of Biological Sciences, Virginia Tech. Contact: Taylor Fossett, PhD (tfossett@alumni.unca.edu)
+Authors: Taylor E. Fossett; Guillian H. Casanova; Samuel J. Lane; David
+C. Haak; Isaac J. VanDiest, Elizabeth R. Gilbert, and Kendra B. Sewall.
+
+Submitted to Molecular Ecology.
+
+Sewall Lab, Department of Biological Sciences, Virginia Tech. Contact:
+Taylor Fossett, PhD (<tfossett@alumni.unca.edu>) PI: Kendra Sewall, PhD
+(<ksewall@vt.edu>)
 
 ## Study overview
 
-[We compared the hypothalamic transcriptome of urban and rural male song sparrows (Melospiza melodia) at baseline to identify differentially expressed genes associated with urbanization and the NPY system. We also measured territorial aggression via simulated territorial intrusion and compared NPY peptide abundance (infundibular and paraventricular nuclei) and hypothalamic expression of NPY and its receptors (NPY1R, NPY2R, NPY5R; qPCR) between urban and rural males.
+\[We compared the hypothalamic transcriptome of urban and rural male
+song sparrows (Melospiza melodia) at baseline to identify differentially
+expressed genes associated with urbanization and the NPY system. We also
+measured territorial aggression via simulated territorial intrusion and
+compared NPY peptide abundance (infundibular and paraventricular nuclei)
+and hypothalamic expression of NPY and its receptors (NPY1R, NPY2R,
+NPY5R; qPCR) between urban and rural males.
 
 ## Files
 
 | File | Description |
-|------|-------------|
+|----|----|
 | `raw_ct.csv` | Raw Ct values as exported from the instrument |
 | `ACTB/raw/[raw Ct file].csv` | Raw ACTB Ct values as exported from the instrument |
 | `morpho_master1.csv` | Morphometrics master and aggression file |
@@ -28,12 +40,12 @@ Sewall Lab, Department of Biological Sciences, Virginia Tech. Contact: Taylor Fo
 | `master_NPY_gene_expression.csv` | Ct, ΔCt, ΔΔCt and RQ values, with sample metadata |
 | `wide_master_NPY_gene_expression.csv` | wide version of Ct, ΔCt, ΔΔCt and RQ values, with sample metadata |
 | `NPY.genes.PCA.csv` | PCA data file |
-| `mutated_PCA.csv` | PCA data file with NA's removed (mutated) and aggression added, use for PCA analysis |
-| `NPY.cell.counts.csv` | NPY cell count data file
+| `mutated_PCA.csv` | PCA data file with NA’s removed (mutated) and aggression added, use for PCA analysis |
+| `NPY.cell.counts.csv` | NPY cell count data file |
 | `expression_aggression(pc1).csv` | NPY system gene expression (raw) + aggression (PC1) |
 | `expression(pc1)_aggression(pc1).csv` | NPY system gene expression (PC1) + aggression (PC1) |
 | `Calculating.delta.delta.ct.and.RQ.Rmd` | Calculates ΔCt, ΔΔCt and RQ |
-| `NPY_system_matrix.R` | Statistical analysis for NPY system gene-gene matrix | ****NEED GUILLIAN TO UPDATE THE BEGINNING OF THE CODE SO THAT ITS NOT A DIRECTORY***
+| `NPY_system_matrix.R` | Statistical analysis for NPY system gene-gene matrix |
 | `NPY.gene.expression.Rmd` | Statistical analysis for all gene expression measures |
 | `NPY.peptide.abundance.Rmd` | Statistical analysis for all peptide abundance measures |
 
@@ -50,23 +62,29 @@ Sewall Lab, Department of Biological Sciences, Virginia Tech. Contact: Taylor Fo
 - `actb._C`: target gene cycle threshold for ACTB
 - `ID`: individual bird ID
 - `Habitat`: Urban or Rural
-- `TRIAL`: aggression recorded in the first 6 mins (early) and last 6 mins (late) of the STI
+- `TRIAL`: aggression recorded in the first 6 mins (early) and last 6
+  mins (late) of the STI
 - `Distance..m.`: distance to speaker during a 6 min STI
 - `No..Broadcast.Songs`: number of broadcast songs during a 6 min STI
 - `No..soft.songs`: number of soft songs during a 6 min STI
 - `Wing.wave`: number of wing waves during a 6 min STI
 - `mal.agg.score.no.b.PC1`: male aggression score (PC1)
 - `delta.ct`: target Ct minus reference gene Ct
-- `dd.ct`: ΔCt minus mean ΔCt of [calibrator group]
+- `dd.ct`: ΔCt minus mean ΔCt of \[calibrator group\]
 - `RQ`: 2^(−ΔΔCt)
 
 ## Notes
 
 - Reference gene: ACTB Calibrator: Rural.
-- Outliers with a Ct below 18 were removed from gene expression calculations and analysis.
+- Outliers with a Ct below 18 were removed from gene expression
+  calculations and analysis.
 - Analyses were run in R core Team 2023; ver. 4.5.2.
-- Run scripts in numerical order. Open the project through the `.Rproj` file so relative paths resolve. All files must be in the same folder. 
+- Open the project through the `.Rproj` file so relative paths resolve.
+  All files must be in the same folder.
 
 ## License
 
-Data and code are released under the [Creative Commons Attribution 4.0 International License (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/). Please cite the associated article when using these data.
+Data and code are released under the [Creative Commons Attribution 4.0
+International License (CC BY
+4.0)](https://creativecommons.org/licenses/by/4.0/). Please cite the
+associated article when using these data.

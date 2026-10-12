@@ -1,0 +1,713 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+## Installing packages
+```{r}
+
+BiocManager::install("DESeq2")
+install.packages("tidyverse")
+
+```
+
+## Loading libraries
+```{r}
+library("DESeq2")
+library("variancePartition")
+library("BiocParallel")
+library("reshape2")
+library("tidyverse")
+```
+
+```{r}
+data_dir = file.path("~/Library/CloudStorage/GoogleDrive-dhaak@vt.edu/Shared drives/2022_SOSP_prelim/Data/")
+figs_dir = file.path("~/Library/CloudStorage/GoogleDrive-dhaak@vt.edu/Shared drives/2022_SOSP_prelim/Figures/")
+```
+
+
+## Reading in the data
+```{r}
+bird_counts <- read.delim(file.path(data_dir, "bird_counts.txt"), comment.char="#", header = TRUE, row.names = 1)
+bird_counts <- bird_counts[,-c(1:5)]
+bird_counts <- bird_counts[rowSums(bird_counts)>=100,]
+#bird_counts <- bird_counts[rowSums(bird_counts)<=50000,]
+colnames(bird_counts)
+countData <- bird_counts %>% 
+  dplyr::rename(
+    S11 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S11_S8_L001Aligned.sortedByCoord.out.bam, 
+S12 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S12_S9_L001Aligned.sortedByCoord.out.bam, 
+S13 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S13_S10_L001Aligned.sortedByCoord.out.bam,
+S14 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S14_S11_L001Aligned.sortedByCoord.out.bam,
+S16 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S16_S12_L001Aligned.sortedByCoord.out.bam,
+S17 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S17_S13_L001Aligned.sortedByCoord.out.bam,
+S18 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S18_S14_L001Aligned.sortedByCoord.out.bam,
+S1 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S1_S1_L001Aligned.sortedByCoord.out.bam,
+S22 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S22_S15_L001Aligned.sortedByCoord.out.bam,
+S24 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S24_S16_L001Aligned.sortedByCoord.out.bam,
+S25 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S25_S17_L001Aligned.sortedByCoord.out.bam,
+S26 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S26_S18_L001Aligned.sortedByCoord.out.bam,
+S27 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S27_S19_L001Aligned.sortedByCoord.out.bam,
+S28 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S28_S20_L001Aligned.sortedByCoord.out.bam,
+S2 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S2_S2_L001Aligned.sortedByCoord.out.bam,
+S3 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S3_S3_L001Aligned.sortedByCoord.out.bam,
+S4 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S4_S4_L001Aligned.sortedByCoord.out.bam,
+S6 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S6_S5_L001Aligned.sortedByCoord.out.bam,
+S7 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S7_S6_L001Aligned.sortedByCoord.out.bam,
+S9 = X.projects.mcbee.haak.birdRNA_8387.02_mapped.02_1_zonoalign.8387.S9_S7_L001Aligned.sortedByCoord.out.bam)
+View(countData)
+
+colData <- read.table(file.path(data_dir, "Samples_files.txt"), header = TRUE, row.names = 1)
+all(rownames(colData) %in% colnames(countData))
+countData <- countData[, rownames(colData)]
+all(rownames(colData) == colnames(countData)) 
+
+```
+
+```{r}
+cor_samps<-round(cor(countData, method ="spearman"), digits = 2)
+melted_cor_samps<-melt(cor_samps)
+ggheatmap<-ggplot(data = melted_cor_samps, aes(x=Var1, y=Var2, fill = value)) + 
+  geom_tile() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, size = 12, hjust = 1)) +
+  theme(axis.text.y = element_text(size = 12))
+ggheatmap<-ggheatmap + 
+  geom_text(aes(Var2, Var1, label = value), color = "white", size = 4) +
+theme(
+  axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  panel.grid.major = element_blank(),
+  panel.border = element_blank(),
+  panel.background = element_blank(),
+  axis.ticks = element_blank())
+ggheatmap
+```
+```{r}
+countDatadrops<-countData %>% 
+  select(-S4, -S14)
+cor_sampsdrops<-round(cor(countDatadrops, method ="spearman"), digits = 2)
+melted_cor_samps<-melt(cor_sampsdrops)
+ggheatmap<-ggplot(data = melted_cor_samps, aes(x=Var1, y=Var2, fill = value)) + 
+  geom_tile() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, size = 12, hjust = 1)) +
+  theme(axis.text.y = element_text(size = 12))
+ggheatmap<-ggheatmap + 
+  geom_text(aes(Var2, Var1, label = value), color = "white", size = 4) +
+theme(
+  axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  panel.grid.major = element_blank(),
+  panel.border = element_blank(),
+  panel.background = element_blank(),
+  axis.ticks = element_blank())
+ggheatmap
+
+scale_drops<-scale(t(countDatadrops))
+d <- dist(scale_drops)
+hc<-hclust(d, method = "ward.D2")
+plot(hc)
+```
+
+
+```{r}
+dds<- DESeqDataSetFromMatrix(countData = countData, colData = colData, design = ~ Site - 1)
+dds<-DESeq(dds)
+res01<-results(dds)
+summary(res01)
+names(res01)
+mcols(res01)
+reOrdered<-res01[order(res01$padj),]
+resultsNames(dds)
+rld<- rlog(dds, blind=TRUE)
+vsd<-varianceStabilizingTransformation(dds, blind=TRUE)
+
+select <- order(rowMeans(counts(dds, normalized=FALSE)), decreasing=TRUE)[1:100]
+nt <- normTransform(dds) # defaults to log2(x+1)
+log2.norm.counts <- assay(nt)[select,]
+
+plotPCA(vsd, intgroup=c("Condition"))
+```
+
+```{r}
+resultsNames(dds)
+resNVTHER<-results(dds, contrast=c("Site","NVT","Heritage"), independentFiltering=TRUE, alpha=0.05, pAdjustMethod="BH", parallel=TRUE)
+resSVTHER <- results(dds, contrast=c("Site", "SVT", "Heritage"), independentFiltering=TRUE, alpha=0.05, pAdjustMethod="BH", parallel=TRUE)
+
+#install.packages("ashr")
+require(ashr)
+
+#Using LFC shrinkage to compare genes by L2FC
+lfcNVTHER<- lfcShrink(dds, contrast=c("Site","NVT","Heritage"), type="ashr")
+lfcSVTHER <- lfcShrink(dds, contrast=c("Site", "SVT", "Heritage") , type="ashr")
+lfcRADHER <- lfcShrink(dds, contrast=c("Site", "Radford", "Heritage"), type = "ashr")
+lfcNVTKEN<- lfcShrink(dds, contrast=c("Site","NVT","Kent"), type="ashr")
+lfcSVTKEN <- lfcShrink(dds, contrast=c("Site", "SVT", "Kent") , type="ashr")
+lfcRADKEN <- lfcShrink(dds, contrast=c("Site", "Radford", "Kent"), type = "ashr")
+lfcNVTSTR<- lfcShrink(dds, contrast=c("Site","NVT","Stream"), type="ashr")
+lfcSVTSTR <- lfcShrink(dds, contrast=c("Site", "SVT", "Stream") , type="ashr")
+lfcRADSTR <- lfcShrink(dds, contrast=c("Site", "Radford", "Stream"), type = "ashr")
+
+lfcNVTSVT<- lfcShrink(dds, contrast=c("Site","NVT","SVT"), type="ashr")
+lfcSVTRAD <- lfcShrink(dds, contrast=c("Site", "SVT", "Radford") , type="ashr")
+lfcRADNVT <- lfcShrink(dds, contrast=c("Site", "Radford", "NVT"), type = "ashr")
+lfcNVTRAD<- lfcShrink(dds, contrast=c("Site","NVT","Radford"), type="ashr")
+lfcKENHER<- lfcShrink(dds, contrast=c("Site","Kent","Heritage"), type="ashr")
+lfcKENSTR<- lfcShrink(dds, contrast=c("Site","Kent","Stream"), type="ashr")
+lfcSTRHER<- lfcShrink(dds, contrast=c("Site","Stream", "Heritage"), type="ashr")
+
+
+
+
+lfcNVTHER = lfcNVTHER[order(lfcNVTHER$padj, na.last = NA), ]
+lfcSVTHER = lfcSVTHER[order(lfcSVTHER$padj, na.last = NA), ]
+lfcRADHER = lfcRADHER[order(lfcRADHER$padj, na.last = NA), ]
+lfcNVTKEN = lfcKENHER[order(lfcKENHER$padj, na.last = NA), ]
+lfcSVTKEN = lfcKENHER[order(lfcKENHER$padj, na.last = NA), ]
+lfcRADKEN = lfcRADKEN[order(lfcRADKEN$padj, na.last = NA), ]
+lfcNVTSTR = lfcNVTSTR[order(lfcNVTSTR$padj, na.last = NA), ]
+lfcSVTSTR = lfcSVTSTR[order(lfcSVTSTR$padj, na.last = NA), ]
+lfcRADSTR = lfcRADSTR[order(lfcRADSTR$padj, na.last = NA), ]
+lfcNVTSVT = lfcNVTSVT[order(lfcNVTSVT$padj, na.last = NA), ]
+lfcSVTRAD = lfcSVTRAD[order(lfcSVTRAD$padj, na.last = NA), ]
+lfcRADNVT = lfcRADNVT[order(lfcRADNVT$padj, na.last = NA), ]
+lfcNVTRAD = lfcNVTRAD[order(lfcNVTRAD$padj, na.last = NA), ]
+lfcKENHER = lfcKENHER[order(lfcKENHER$padj, na.last = NA), ]
+lfcKENSTR = lfcKENSTR[order(lfcKENSTR$padj, na.last = NA), ]
+lfcSTRHER = lfcSTRHER[order(lfcSTRHER$padj, na.last = NA), ]
+
+alpha = 0.01
+
+```
+
+# Contrasts with Heritage
+```{r}
+lfcNVTHER_tbl <- as_tibble(lfcNVTHER, rownames = "Gene_ID") %>% 
+  mutate(group = "NVTHER") 
+lfcSVTHER_tbl <- as_tibble(lfcSVTHER, rownames = "Gene_ID") %>% 
+    mutate(group = "SVTHER")
+lfcRADHER_tbl <- as_tibble(lfcRADHER, rownames = "Gene_ID") %>% 
+    mutate(group = "RADHER")
+lfcKENHER_tbl <- as_tibble(lfcKENHER , rownames = "Gene_ID") %>% 
+  mutate(group = "KENHER" )
+lfcSTRHER_tbl <- as_tibble(lfcSTRHER , rownames = "Gene_ID") %>% 
+  mutate(group = "HERSTR" )
+
+est_exp <- lfcNVTHER_tbl %>% 
+  inner_join(lfcSVTHER_tbl, by = "Gene_ID") %>% 
+  inner_join(lfcRADHER_tbl, by = "Gene_ID") %>% 
+  inner_join(lfcKENHER_tbl, by = "Gene_ID") %>%
+  inner_join(lfcSTRHER_tbl, by = "Gene_ID" ) %>% 
+  select(-pvalue.x, -pvalue.y, -pvalue.x.x, -pvalue.y.y, -pvalue) %>% 
+  dplyr::rename(
+    L2FC_NVTHER = log2FoldChange.x,
+    L2FC_SVTHER = log2FoldChange.y,
+    L2FC_RADHER = log2FoldChange.x.x,
+    L2FC_KENHER = log2FoldChange.y.y,
+    L2FC_STRHER = log2FoldChange,
+    padj_NVTHER = padj.x,
+    padj_SVTHER = padj.y,
+    padj_RADHER = padj.x.x,
+    padj_KENHER = padj.y.y,
+    padj_STRHER = padj
+  ) %>% 
+  mutate(
+    sigUR = case_when(padj_NVTHER <= 0.05 & padj_SVTHER <= 0.05 ~ "UHER_only",
+                           padj_KENHER <= 0.05 & padj_STRHER <= 0.05 ~ "RHER_only",
+                           TRUE ~ "Unchaged")
+  )
+View(est_exp)
+
+est_exp %>% 
+  filter(sigUR == "UHER_only")
+```
+
+```{r}
+lfcNVTKEN_tbl <- as_tibble(lfcNVTKEN, rownames = "Gene_ID") %>% 
+  mutate(group = "NVTKEN") 
+lfcSVTKEN_tbl <- as_tibble(lfcSVTKEN, rownames = "Gene_ID") %>% 
+    mutate(group = "SVTKEN")
+lfcRADKEN_tbl <- as_tibble(lfcRADKEN, rownames = "Gene_ID") %>% 
+    mutate(group = "RADKEN")
+lfcKENHER_tbl <- as_tibble(lfcKENHER , rownames = "Gene_ID") %>% 
+  mutate(group = "KENHER" )
+lfcKENSTR_tbl <- as_tibble(lfcKENSTR , rownames = "Gene_ID") %>% 
+  mutate(group = "KENSTR" )
+
+est_exp_KEN <- lfcNVTKEN_tbl %>% 
+  inner_join(lfcSVTKEN_tbl, by = "Gene_ID") %>% 
+  inner_join(lfcRADKEN_tbl, by = "Gene_ID") %>% 
+  inner_join(lfcKENHER_tbl, by = "Gene_ID") %>%
+  inner_join(lfcKENSTR_tbl, by = "Gene_ID" ) %>% 
+  select(-pvalue.x, -pvalue.y, -pvalue.x.x, -pvalue.y.y, -pvalue) %>% 
+  rename(
+    L2FC_NVTKEN = log2FoldChange.x,
+    L2FC_SVTKEN = log2FoldChange.y,
+    L2FC_RADKEN = log2FoldChange.x.x,
+    L2FC_KENHER = log2FoldChange.y.y,
+    L2FC_KENSTR = log2FoldChange,
+    padj_NVTKEN = padj.x,
+    padj_SVTKEN = padj.y,
+    padj_RADKEN = padj.x.x,
+    padj_KENHER = padj.y.y,
+    padj_KENSTR = padj
+  ) %>% 
+  mutate(
+    sigUR = case_when(padj_NVTKEN <= 0.05 & padj_SVTKEN <= 0.05 ~ "UHER_only",
+                           padj_KENHER <= 0.05 & padj_KENSTR <= 0.05 ~ "RHER_only",
+                           TRUE ~ "Unchaged")
+  )
+View(est_exp_KEN)
+
+est_exp_KEN %>% 
+  filter(sigUR == "UHER_only" | sigUR == "RHER_only")
+```
+
+```{r}
+lfcNVTSTR_tbl <- as_tibble(lfcNVTSTR, rownames = "Gene_ID") %>% 
+  mutate(group = "NVTKEN") 
+lfcSVTSTR_tbl <- as_tibble(lfcSVTKEN, rownames = "Gene_ID") %>% 
+    mutate(group = "SVTKEN")
+lfcRADSTR_tbl <- as_tibble(lfcRADKEN, rownames = "Gene_ID") %>% 
+    mutate(group = "RADKEN")
+lfcKENSTR_tbl <- as_tibble(lfcKENSTR , rownames = "Gene_ID") %>% 
+  mutate(group = "KENHER" )
+lfcSTRHER_tbl <- as_tibble(lfcSTRHER , rownames = "Gene_ID") %>% 
+  mutate(group = "KENSTR" )
+
+est_exp_STR <- lfcNVTSTR_tbl %>% 
+  inner_join(lfcSVTSTR_tbl, by = "Gene_ID") %>% 
+  inner_join(lfcRADSTR_tbl, by = "Gene_ID") %>% 
+  inner_join(lfcKENSTR_tbl, by = "Gene_ID") %>%
+  inner_join(lfcSTRHER_tbl, by = "Gene_ID" ) %>% 
+  select(-pvalue.x, -pvalue.y, -pvalue.x.x, -pvalue.y.y, -pvalue) %>% 
+  rename(
+    L2FC_NVTSTR = log2FoldChange.x,
+    L2FC_SVTSTR = log2FoldChange.y,
+    L2FC_RADSTR = log2FoldChange.x.x,
+    L2FC_KENSTR = log2FoldChange.y.y,
+    L2FC_STRHER = log2FoldChange,
+    padj_NVTSTR = padj.x,
+    padj_SVTSTR = padj.y,
+    padj_RADSTR = padj.x.x,
+    padj_KENSTR = padj.y.y,
+    padj_STRHER = padj
+  ) %>% 
+  mutate(
+    sigUR = case_when(padj_NVTSTR <= 0.05 & padj_SVTSTR <= 0.05 ~ "UHER_only",
+                           padj_KENSTR <= 0.05 & padj_STRHER <= 0.05 ~ "RHER_only",
+                           TRUE ~ "Unchaged")
+  )
+View(est_exp_STR)
+
+est_exp_STR %>% 
+  filter(sigUR == "UHER_only" | sigUR == "RHER_only")
+```
+
+```{r}
+# Some plotting
+```{r reshape the count data}
+normalized_counts = counts(dds, normalized=TRUE)
+counts_reshape <- normalized_counts %>% 
+  as_tibble(rownames = "Gene_ID") %>% 
+  pivot_longer(cols = -Gene_ID, names_to = "SampleID", values_to = "Expression") %>% 
+#  separate(SampleID, into = c("a", "b", "c", "c2", "Duke_ID", "Sample" ), sep = "_") %>% 
+#  select(-a, -b , -c, -c2) %>% 
+  view()
+counts_reshape <- counts_reshape %>% 
+ mutate(Habitat = recode(SampleID, S1 = "Rural",
+                        S2 = "Rural",
+                        S3 = "Urban",
+                        S4 = "Urban",
+                        S6 = "Rural",
+                        S7 = "Urban",
+                        S9 = "Urban",
+                        S11 = "Rural",
+                        S12 = "Urban",
+                        S13 = "Rural",
+                        S14 = "Rural",
+                        S16 = "Rural",
+                        S17 = "Rural",
+                        S18 = "Urban",
+                        S22 = "Urban",
+                        S24 = "Rural",
+                        S25 = "Urban",
+                        S26 = "Rural",
+                        S27 = "Urban",
+                        S28 = "Rural",
+                        )) %>% 
+mutate(Site = recode(SampleID, S1 = "Heritage",
+                        S2 = "Stream",
+                        S3 = "NVT",
+                        S4 = "SVT",
+                        S6 = "Stream",
+                        S7 = "SVT",
+                        S9 = "SVT",
+                        S11 = "Heritage",
+                        S12 = "NVT",
+                        S13 = "Stream",
+                        S14 = "Kent",
+                        S16 = "Kent",
+                        S17 = "Stream",
+                        S18 = "SVT",
+                        S22 = "NVT",
+                        S24 = "Heritage",
+                        S25 = "Radford",
+                        S26 = "Kent",
+                        S27 = "Radford",
+                        S28 = "Kent",
+                        )) %>% 
+  view()
+
+
+counts_reshape %>% 
+  ggplot(aes(SampleID, Expression, colors = Habitat)) +
+  geom_boxplot() + 
+  ylim(0,10000)
+  theme_bw(16)
+```
+
+
+```{r}
+library(pheatmap)
+#find gene length normalized values 
+#geneLengths <- counts$width
+#rpk <- apply( subset(counts, select = c(-width)), 2, 
+#              function(x) x/(geneLengths/1000))
+#normalize by the sample size using rpk values
+#tpm <- apply(rpk, 2, function(x) x / sum(as.numeric(x)) * 10^6)
+colData2 <- colData %>% 
+  select(-Brain_on_Ice, -Sacrifice_Time, -Playback_duration, -Seq_sample, -Date_collected, -Bird_ID)
+selectedGenes <- names(sort(apply(normalized_counts, 1, var), 
+                            decreasing = T)[1:100])
+pheatmap(normalized_counts[selectedGenes,], 
+             scale = 'row',
+             annotation_col = colData2, 
+             show_rownames = FALSE)
+```
+```{r}
+set.seed(101)
+
+scaleCounts <- scale(t(countData))
+d = dist(scaleCounts)
+
+hc=hclust(d, method="complete")
+plot(hc)
+
+# we have to transpore the matrix t()
+# so that we calculate distances between samples
+knormbird=kmeans(t(normalized_counts),centers=2)  
+
+# number of data points in each cluster
+table(knormbird$cluster)
+
+library(cluster)
+
+set.seed(101)
+pamclu=cluster::pam(t(normalized_counts),k=4)
+plot(silhouette(pamclu),main=NULL)
+
+Ks=sapply(2:7,
+    function(i) 
+      summary(silhouette(pam(t(normalized_counts),k=i)))$avg.width)
+plot(2:7,Ks,xlab="k",ylab="av. silhouette",type="b",
+     pch=19)
+
+library(NbClust)
+nb = NbClust(data=t(normalized_counts), 
+             distance = "euclidean", min.nc = 1,
+        max.nc = 7, method = "kmeans",
+        index=c("kl","ch","cindex","db","silhouette",
+                "duda","pseudot2","beale","ratkowsky",
+                "gap","gamma","mcclain","gplus",
+                "tau","sdindex","sdbw"))
+nb = NbClust(data=t(normalized_counts), 
+             distance = "euclidean", min.nc = 1,
+        max.nc = 3, method = "kmeans",
+        index=c("gamma"))
+
+table(nb$Best.nc[1,]) # consensus seems to be 3 clusters 
+```
+
+
+```{r}
+ gene_plots <- function (x){
+   plotsdf <- counts_reshape %>% 
+     dplyr::filter(Gene_ID == x) %>%
+     group_by(Habitat, Site) %>%
+     dplyr::summarize(mean=mean(Expression), n = n(), se=sd(Expression)/sqrt(n))
+   
+   plot.x <- plotsdf %>%
+     ggplot(aes(Habitat, mean, color = Site)) +
+     stat_summary(fun="mean", geom="line", aes(group=factor(Habitat))) +
+     geom_pointrange(aes(ymin = plotsdf$mean-plotsdf$se, ymax = plotsdf$mean + plotsdf$se)) +
+     ylab(paste("Normalized mean Expression ", x, sep = " ")) + 
+     theme_bw(16)
+   
+   return(plot.x)
+ }
+
+gene_plots("NPY")
+gene_plots("NPY1R")
+gene_plots("NPY2R")
+gene_plots("NPY5R")
+gene_plots("AVT4R")
+gene_plots("AVT3R")
+gene_plots("AVT")
+gene_plots("AR")
+gene_plots("ESR1")
+gene_plots("ESR2")
+gene_plots("ARO")
+gene_plots("CRH")
+gene_plots("CRHBP")
+gene_plots("CRHR2")
+gene_plots("NR3C1")
+gene_plots("NR3C2")
+gene_plots("LOC113459353") #Unknown
+gene_plots("TH") #Tyrosine 
+gene_plots("TRPC6") 
+```
+
+```{r}
+BiocManager::install("WGCNA")
+library("WGCNA")
+
+normalized_counts <- assay(vsd) %>%
+  t()
+
+sft <- pickSoftThreshold(normalized_counts,
+  dataIsExpr = TRUE,
+  corFnc = cor,
+  networkType = "signed"
+)
+
+sft_df <- data.frame(sft$fitIndices) %>%
+  dplyr::mutate(model_fit = -sign(slope) * SFT.R.sq)
+```
+
+```{r}
+ggplot(sft_df, aes(x = Power, y = model_fit, label = Power)) +
+  # Plot the points
+  geom_point() +
+  # We'll put the Power labels slightly above the data points
+  geom_text(nudge_y = 0.1) +
+  # We will plot what WGCNA recommends as an R^2 cutoff
+  geom_hline(yintercept = 0.80, col = "red") +
+  # Just in case our values are low, we want to make sure we can still see the 0.80 level
+  ylim(c(min(sft_df$model_fit), 1.05)) +
+  # We can add more sensible labels for our axis
+  xlab("Soft Threshold (power)") +
+  ylab("Scale Free Topology Model Fit, signed R^2") +
+  ggtitle("Scale independence") +
+  # This adds some nicer aesthetics to our plot
+  theme_classic()
+```
+
+
+
+
+```{r}
+bwnet <- blockwiseModules(normalized_counts,
+  maxBlockSize = 5000, # What size chunks (how many genes) the calculations should be run in
+  TOMType = "signed", # topological overlap matrix
+  power = 12, # soft threshold for network construction
+  numericLabels = TRUE, # Let's use numbers instead of colors for module labels
+  randomSeed = 1234, # there's some randomness associated with this calculation
+  # so we should set a seed
+)
+```
+
+```{r}
+module_eigengenes <- bwnet$MEs
+
+# Print out a preview
+head(module_eigengenes)
+```
+
+```{r}
+all.equal(colData$Condition, rownames(module_eigengenes))
+
+des_mat <- model.matrix(~ colData$Condition)
+# lmFit() needs a transposed version of the matrix
+fit <- limma::lmFit(t(module_eigengenes), design = des_mat)
+
+# Apply empirical Bayes to smooth standard errors
+fit <- limma::eBayes(fit)
+
+# Apply multiple testing correction and obtain stats
+stats_df <- limma::topTable(fit, number = ncol(module_eigengenes)) %>%
+  tibble::rownames_to_column("module")
+View(stats_df)
+```
+
+
+
+```{r}
+res.pca <- prcomp(bird_counts, scale = TRUE)
+print(res.pca)
+eig.val <- get_eigenvalue(res.pca)
+eig.val
+
+summary(bird_counts)
+
+corrplot(var$cos2, is.corr=FALSE)
+fviz_eig(res.pca, col.var="blue")
+
+var <- get_pca_var(res.pca)
+var
+
+```
+
+```{r}
+library("corrplot")
+corrplot(var$cos2, is.corr=FALSE)
+fviz_pca_var(res.pca,
+             col.ind = "cos2", # Color by the quality of representation
+             gradient.cols = c("darkorchid4", "gold", "darkorange"),
+             repel = TRUE
+             )
+```
+
+```{r}
+fviz_contrib(res.pca, choice = "ind", axes = 1:2)
+```
+
+## Trying subset version
+```{r}
+countDatasub <- countData %>% 
+  select(S4,S7,S9,S11,S18,S24)
+colDatasub <- colData %>% 
+  filter( Site == "SVT" | Site == "Heritage")
+```
+
+```{r}
+ddsSK<- DESeqDataSetFromMatrix(countData = countDatasub, colData = colDatasub, design = ~ Condition - 1)
+ddsSK<-DESeq(ddsSK)
+res01<-results(ddsSK)
+summary(res01)
+names(res01)
+mcols(res01)
+reOrdered<-res01[order(res01$padj),]
+resultsNames(ddsSK)
+rld<- rlog(ddsSK, blind=TRUE)
+vsd<-varianceStabilizingTransformation(ddsSK, blind=TRUE)
+
+select <- order(rowMeans(counts(ddsSK, normalized=FALSE)), decreasing=TRUE)[1:100]
+nt <- normTransform(ddsSK) # defaults to log2(x+1)
+log2.norm.counts <- assay(nt)[select,]
+
+plotPCA(vsd, intgroup=c("Condition"))
+```
+
+
+```{r}
+require(ashr)
+ddsSK@colData$Condition <- as.factor(ddsSK@colData$Condition)
+resultsNames(ddsSK)
+lfcSK<- lfcShrink(ddsSK, contrast=c("Condition","Urban","Rural"), type="ashr")
+lfcSK = lfcSK[order(lfcSK$padj, na.last = NA), ]
+view(lfcSK)
+```
+
+
+
+# Some plotting
+```{r reshape the count data}
+normalized_countssub = counts(ddsSK, normalized=TRUE)
+counts_reshapesub <- normalized_countssub %>% 
+  as_tibble(rownames = "Gene_ID") %>% 
+  pivot_longer(cols = -Gene_ID, names_to = "SampleID", values_to = "Expression") %>% 
+#  separate(SampleID, into = c("a", "b", "c", "c2", "Duke_ID", "Sample" ), sep = "_") %>% 
+#  select(-a, -b , -c, -c2) %>% 
+  view()
+counts_reshapesub <- counts_reshapesub %>% 
+ mutate(Habitat = recode(SampleID, 
+                        S4 = "Urban",
+                        S7 = "Urban",
+                        S9 = "Urban",
+                        S11 = "Rural",
+                        S18 = "Urban",
+                        S24 = "Rural"
+                        )) %>% 
+mutate(Site = recode(SampleID, 
+                        S4 = "SVT",
+                        S7 = "SVT",
+                        S9 = "SVT",
+                        S11 = "Heritage",
+                        S18 = "SVT",
+                        S24 = "Heritage"
+                        ))  
+  view(counts_reshapesub)
+
+lfcNVTSTR_subtbl <- as_tibble(lfcNVTSTR, rownames = "Gene_ID") %>% 
+  mutate(group = "NVTSTR") 
+view(lfcNVTSTR_subtbl)
+
+lfcNVTSTR_subtbl %>%
+  inner_join(counts_reshapesub, by = "Gene_ID")
+  
+  
+  
+```
+
+
+
+```{r}
+gene_plots <- function (x){
+   plotsdf <- counts_reshapesub %>% 
+     dplyr::filter(Gene_ID == x) %>%
+     group_by(Habitat) %>%
+     dplyr::summarize(mean=mean(Expression), n = n(), se=sd(Expression)/sqrt(n))
+   
+   plot.x <- plotsdf %>%
+     ggplot(aes(Habitat, mean)) +
+     stat_summary(fun="mean", geom="line", aes(group=factor(Habitat))) +
+     geom_pointrange(aes(ymin = plotsdf$mean-plotsdf$se, ymax = plotsdf$mean + plotsdf$se)) +
+     ylab(paste("Normalized mean Expression ", x, sep = " ")) + 
+     theme_bw(16)
+   
+   return(plot.x)
+ }
+
+SVTHER_NPY<-gene_plots("NPY")
+SVTHER_CNPY3<-gene_plots("CNPY3")
+gene_plots("NPY1R")
+gene_plots("NPY2R")
+gene_plots("NPY5R")
+gene_plots("AVT4R")
+gene_plots("AVT3R")
+gene_plots("AVT")
+gene_plots("AR")
+gene_plots("ESR1")
+gene_plots("ESR2")
+gene_plots("ARO")
+gene_plots("CRH")
+gene_plots("CRHBP")
+gene_plots("CRHR2")
+gene_plots("NR3C1")
+gene_plots("NR3C2")
+gene_plots("LOC113459353") #Unknown
+gene_plots("TH") #Tyrosine 
+gene_plots("TRPC6") 
+gene_plots("BARHL1")#BarH like homeobox
+
+ggsave(file.path(figs_dir, "SVT_Heritage_NPY.png"), SVTHER_NPY)
+ggsave(file.path(figs_dir, "SVT_Heritage_CNPY3.png"), SVTHER_CNPY3)
+```
+
+```{r}
+library(pheatmap)
+#find gene length normalized values 
+#geneLengths <- counts$width
+#rpk <- apply( subset(counts, select = c(-width)), 2, 
+#              function(x) x/(geneLengths/1000))
+#normalize by the sample size using rpk values
+#tpm <- apply(rpk, 2, function(x) x / sum(as.numeric(x)) * 10^6)
+normalized_countssub<-counts(ddsSK, normalized=TRUE)
+selectedGenes <- names(sort(apply(normalized_countssub, 1, var), 
+                            decreasing = T)[1:100])
+pheatmap(normalized_counts[selectedGenes,], 
+             scale = 'row',
+             annotation_col = colDatasub, 
+             show_rownames = FALSE)
+```
